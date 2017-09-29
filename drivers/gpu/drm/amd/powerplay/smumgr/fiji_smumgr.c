@@ -58,216 +58,171 @@ static const struct SMU73_Discrete_GraphicsLevel avfs_graphics_level[8] = {
 		{ 0xf811d047, 0x80380100,   0x01,     0x00,   0x1e00, 0x00000610, 0x87020000, 0x21680000, 0x12000000,   0,      0,   0x0c,   0x01,       0x01,        0x01,      0x00,   0x00,      0x00,     0x00 }
 };
 
-static int fiji_start_smu_in_protection_mode(struct pp_smumgr *smumgr)
+static int fiji_start_smu_in_protection_mode(struct pp_hwmgr *hwmgr)
 {
 	int result = 0;
 
 	/* Wait for smc boot up */
-	/* SMUM_WAIT_INDIRECT_FIELD_UNEQUAL(smumgr, SMC_IND,
+	/* PHM_WAIT_INDIRECT_FIELD_UNEQUAL(hwmgr, SMC_IND,
 		RCU_UC_EVENTS, boot_seq_done, 0); */
 
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMC_SYSCON_RESET_CNTL, rst_reg, 1);
 
-	result = smu7_upload_smu_firmware_image(smumgr);
+	result = smu7_upload_smu_firmware_image(hwmgr);
 	if (result)
 		return result;
 
 	/* Clear status */
-	cgs_write_ind_register(smumgr->device, CGS_IND_REG__SMC,
+	cgs_write_ind_register(hwmgr->device, CGS_IND_REG__SMC,
 			ixSMU_STATUS, 0);
 
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMC_SYSCON_CLOCK_CNTL_0, ck_disable, 0);
 
 	/* De-assert reset */
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMC_SYSCON_RESET_CNTL, rst_reg, 0);
 
 	/* Wait for ROM firmware to initialize interrupt hendler */
-	/*SMUM_WAIT_VFPF_INDIRECT_REGISTER(smumgr, SMC_IND,
+	/*SMUM_WAIT_VFPF_INDIRECT_REGISTER(hwmgr, SMC_IND,
 			SMC_INTR_CNTL_MASK_0, 0x10040, 0xFFFFFFFF); */
 
 	/* Set SMU Auto Start */
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMU_INPUT_DATA, AUTO_START, 1);
 
 	/* Clear firmware interrupt enable flag */
-	cgs_write_ind_register(smumgr->device, CGS_IND_REG__SMC,
+	cgs_write_ind_register(hwmgr->device, CGS_IND_REG__SMC,
 			ixFIRMWARE_FLAGS, 0);
 
-	SMUM_WAIT_VFPF_INDIRECT_FIELD(smumgr, SMC_IND, RCU_UC_EVENTS,
+	PHM_WAIT_VFPF_INDIRECT_FIELD(hwmgr, SMC_IND, RCU_UC_EVENTS,
 			INTERRUPTS_ENABLED, 1);
 
-	cgs_write_register(smumgr->device, mmSMC_MSG_ARG_0, 0x20000);
-	cgs_write_register(smumgr->device, mmSMC_MESSAGE_0, PPSMC_MSG_Test);
-	SMUM_WAIT_FIELD_UNEQUAL(smumgr, SMC_RESP_0, SMC_RESP, 0);
+	cgs_write_register(hwmgr->device, mmSMC_MSG_ARG_0, 0x20000);
+	cgs_write_register(hwmgr->device, mmSMC_MESSAGE_0, PPSMC_MSG_Test);
+	PHM_WAIT_FIELD_UNEQUAL(hwmgr, SMC_RESP_0, SMC_RESP, 0);
 
 	/* Wait for done bit to be set */
-	SMUM_WAIT_VFPF_INDIRECT_FIELD_UNEQUAL(smumgr, SMC_IND,
+	PHM_WAIT_VFPF_INDIRECT_FIELD_UNEQUAL(hwmgr, SMC_IND,
 			SMU_STATUS, SMU_DONE, 0);
 
 	/* Check pass/failed indicator */
-	if (SMUM_READ_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	if (PHM_READ_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMU_STATUS, SMU_PASS) != 1) {
 		PP_ASSERT_WITH_CODE(false,
 				"SMU Firmware start failed!", return -1);
 	}
 
 	/* Wait for firmware to initialize */
-	SMUM_WAIT_VFPF_INDIRECT_FIELD(smumgr, SMC_IND,
+	PHM_WAIT_VFPF_INDIRECT_FIELD(hwmgr, SMC_IND,
 			FIRMWARE_FLAGS, INTERRUPTS_ENABLED, 1);
 
 	return result;
 }
 
-static int fiji_start_smu_in_non_protection_mode(struct pp_smumgr *smumgr)
+static int fiji_start_smu_in_non_protection_mode(struct pp_hwmgr *hwmgr)
 {
 	int result = 0;
 
 	/* wait for smc boot up */
-	SMUM_WAIT_VFPF_INDIRECT_FIELD_UNEQUAL(smumgr, SMC_IND,
+	PHM_WAIT_VFPF_INDIRECT_FIELD_UNEQUAL(hwmgr, SMC_IND,
 			RCU_UC_EVENTS, boot_seq_done, 0);
 
 	/* Clear firmware interrupt enable flag */
-	cgs_write_ind_register(smumgr->device, CGS_IND_REG__SMC,
+	cgs_write_ind_register(hwmgr->device, CGS_IND_REG__SMC,
 			ixFIRMWARE_FLAGS, 0);
 
 	/* Assert reset */
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMC_SYSCON_RESET_CNTL, rst_reg, 1);
 
-	result = smu7_upload_smu_firmware_image(smumgr);
+	result = smu7_upload_smu_firmware_image(hwmgr);
 	if (result)
 		return result;
 
 	/* Set smc instruct start point at 0x0 */
-	smu7_program_jump_on_start(smumgr);
+	smu7_program_jump_on_start(hwmgr);
 
 	/* Enable clock */
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMC_SYSCON_CLOCK_CNTL_0, ck_disable, 0);
 
 	/* De-assert reset */
-	SMUM_WRITE_VFPF_INDIRECT_FIELD(smumgr->device, CGS_IND_REG__SMC,
+	PHM_WRITE_VFPF_INDIRECT_FIELD(hwmgr->device, CGS_IND_REG__SMC,
 			SMC_SYSCON_RESET_CNTL, rst_reg, 0);
 
 	/* Wait for firmware to initialize */
-	SMUM_WAIT_VFPF_INDIRECT_FIELD(smumgr, SMC_IND,
+	PHM_WAIT_VFPF_INDIRECT_FIELD(hwmgr, SMC_IND,
 			FIRMWARE_FLAGS, INTERRUPTS_ENABLED, 1);
 
 	return result;
 }
 
-static int fiji_setup_pwr_virus(struct pp_smumgr *smumgr)
+static int fiji_setup_pwr_virus(struct pp_hwmgr *hwmgr)
 {
-	int i, result = -1;
+	int i;
+	int result = -EINVAL;
 	uint32_t reg, data;
-	const PWR_Command_Table *virus = PwrVirusTable;
-	struct fiji_smumgr *priv = (struct fiji_smumgr *)(smumgr->backend);
 
-	priv->avfs.AvfsBtcStatus = AVFS_LOAD_VIRUS;
-	for (i = 0; (i < PWR_VIRUS_TABLE_SIZE); i++) {
-		switch (virus->command) {
+	const PWR_Command_Table *pvirus = PwrVirusTable;
+	struct smu7_smumgr *smu_data = (struct smu7_smumgr *)(hwmgr->smu_backend);
+
+	for (i = 0; i < PWR_VIRUS_TABLE_SIZE; i++) {
+		switch (pvirus->command) {
 		case PwrCmdWrite:
-			reg  = virus->reg;
-			data = virus->data;
-			cgs_write_register(smumgr->device, reg, data);
+			reg  = pvirus->reg;
+			data = pvirus->data;
+			cgs_write_register(hwmgr->device, reg, data);
 			break;
+
 		case PwrCmdEnd:
-			priv->avfs.AvfsBtcStatus = AVFS_BTC_VIRUS_LOADED;
 			result = 0;
 			break;
+
 		default:
-			pr_err("Table Exit with Invalid Command!");
-			priv->avfs.AvfsBtcStatus = AVFS_BTC_VIRUS_FAIL;
-			result = -1;
+			pr_info("Table Exit with Invalid Command!");
+			smu_data->avfs.avfs_btc_status = AVFS_BTC_VIRUS_FAIL;
+			result = -EINVAL;
 			break;
 		}
-		virus++;
+		pvirus++;
 	}
+
 	return result;
 }
 
-static int fiji_start_avfs_btc(struct pp_smumgr *smumgr)
+static int fiji_start_avfs_btc(struct pp_hwmgr *hwmgr)
 {
 	int result = 0;
-	struct fiji_smumgr *priv = (struct fiji_smumgr *)(smumgr->backend);
+	struct smu7_smumgr *smu_data = (struct smu7_smumgr *)(hwmgr->smu_backend);
 
-	priv->avfs.AvfsBtcStatus = AVFS_BTC_STARTED;
-	if (priv->avfs.AvfsBtcParam) {
-		if (!smum_send_msg_to_smc_with_parameter(smumgr,
-				PPSMC_MSG_PerformBtc, priv->avfs.AvfsBtcParam)) {
-			if (!smum_send_msg_to_smc(smumgr, PPSMC_MSG_EnableAvfs)) {
-				priv->avfs.AvfsBtcStatus = AVFS_BTC_COMPLETED_UNSAVED;
-				result = 0;
-			} else {
-				pr_err("[AVFS][fiji_start_avfs_btc] Attempt"
-						" to Enable AVFS Failed!");
-				smum_send_msg_to_smc(smumgr, PPSMC_MSG_DisableAvfs);
-				result = -1;
-			}
-		} else {
-			pr_err("[AVFS][fiji_start_avfs_btc] "
-					"PerformBTC SMU msg failed");
-			result = -1;
+	if (0 != smu_data->avfs.avfs_btc_param) {
+		if (0 != smu7_send_msg_to_smc_with_parameter(hwmgr,
+				PPSMC_MSG_PerformBtc, smu_data->avfs.avfs_btc_param)) {
+			pr_info("[AVFS][Fiji_PerformBtc] PerformBTC SMU msg failed");
+			result = -EINVAL;
 		}
 	}
 	/* Soft-Reset to reset the engine before loading uCode */
 	 /* halt */
-	cgs_write_register(smumgr->device, mmCP_MEC_CNTL, 0x50000000);
+	cgs_write_register(hwmgr->device, mmCP_MEC_CNTL, 0x50000000);
 	/* reset everything */
-	cgs_write_register(smumgr->device, mmGRBM_SOFT_RESET, 0xffffffff);
+	cgs_write_register(hwmgr->device, mmGRBM_SOFT_RESET, 0xffffffff);
 	/* clear reset */
-	cgs_write_register(smumgr->device, mmGRBM_SOFT_RESET, 0);
+	cgs_write_register(hwmgr->device, mmGRBM_SOFT_RESET, 0);
 
 	return result;
 }
 
-static int fiji_setup_pm_fuse_for_avfs(struct pp_smumgr *smumgr)
-{
-	int result = 0;
-	uint32_t table_start;
-	uint32_t charz_freq_addr, inversion_voltage_addr, charz_freq;
-	uint16_t inversion_voltage;
-
-	charz_freq = 0x30750000; /* In 10KHz units 0x00007530 Actual value */
-	inversion_voltage = 0x1A04; /* mV Q14.2 0x41A Actual value */
-
-	PP_ASSERT_WITH_CODE(0 == smu7_read_smc_sram_dword(smumgr,
-			SMU7_FIRMWARE_HEADER_LOCATION + offsetof(SMU73_Firmware_Header,
-					PmFuseTable), &table_start, 0x40000),
-			"[AVFS][Fiji_SetupGfxLvlStruct] SMU could not communicate "
-			"starting address of PmFuse structure",
-			return -1;);
-
-	charz_freq_addr = table_start +
-			offsetof(struct SMU73_Discrete_PmFuses, PsmCharzFreq);
-	inversion_voltage_addr = table_start +
-			offsetof(struct SMU73_Discrete_PmFuses, InversionVoltage);
-
-	result = smu7_copy_bytes_to_smc(smumgr, charz_freq_addr,
-			(uint8_t *)(&charz_freq), sizeof(charz_freq), 0x40000);
-	PP_ASSERT_WITH_CODE(0 == result,
-			"[AVFS][fiji_setup_pm_fuse_for_avfs] charz_freq could not "
-			"be populated.", return -1;);
-
-	result = smu7_copy_bytes_to_smc(smumgr, inversion_voltage_addr,
-			(uint8_t *)(&inversion_voltage), sizeof(inversion_voltage), 0x40000);
-	PP_ASSERT_WITH_CODE(0 == result, "[AVFS][fiji_setup_pm_fuse_for_avfs] "
-			"charz_freq could not be populated.", return -1;);
-
-	return result;
-}
-
-static int fiji_setup_graphics_level_structure(struct pp_smumgr *smumgr)
+static int fiji_setup_graphics_level_structure(struct pp_hwmgr *hwmgr)
 {
 	int32_t vr_config;
 	uint32_t table_start;
 	uint32_t level_addr, vr_config_addr;
 	uint32_t level_size = sizeof(avfs_graphics_level);
 
-	PP_ASSERT_WITH_CODE(0 == smu7_read_smc_sram_dword(smumgr,
+	PP_ASSERT_WITH_CODE(0 == smu7_read_smc_sram_dword(hwmgr,
 			SMU7_FIRMWARE_HEADER_LOCATION +
 			offsetof(SMU73_Firmware_Header, DpmTable),
 			&table_start, 0x40000),
@@ -282,7 +237,7 @@ static int fiji_setup_graphics_level_structure(struct pp_smumgr *smumgr)
 	vr_config_addr = table_start +
 			offsetof(SMU73_Discrete_DpmTable, VRConfig);
 
-	PP_ASSERT_WITH_CODE(0 == smu7_copy_bytes_to_smc(smumgr, vr_config_addr,
+	PP_ASSERT_WITH_CODE(0 == smu7_copy_bytes_to_smc(hwmgr, vr_config_addr,
 			(uint8_t *)&vr_config, sizeof(int32_t), 0x40000),
 			"[AVFS][Fiji_SetupGfxLvlStruct] Problems copying "
 			"vr_config value over to SMC",
@@ -290,7 +245,7 @@ static int fiji_setup_graphics_level_structure(struct pp_smumgr *smumgr)
 
 	level_addr = table_start + offsetof(SMU73_Discrete_DpmTable, GraphicsLevel);
 
-	PP_ASSERT_WITH_CODE(0 == smu7_copy_bytes_to_smc(smumgr, level_addr,
+	PP_ASSERT_WITH_CODE(0 == smu7_copy_bytes_to_smc(hwmgr, level_addr,
 			(uint8_t *)(&avfs_graphics_level), level_size, 0x40000),
 			"[AVFS][Fiji_SetupGfxLvlStruct] Copying of DPM table failed!",
 			return -1;);
@@ -298,156 +253,104 @@ static int fiji_setup_graphics_level_structure(struct pp_smumgr *smumgr)
 	return 0;
 }
 
-/* Work in Progress */
-static int fiji_restore_vft_table(struct pp_smumgr *smumgr)
+static int fiji_avfs_event_mgr(struct pp_hwmgr *hwmgr, bool smu_started)
 {
-	struct fiji_smumgr *priv = (struct fiji_smumgr *)(smumgr->backend);
+	struct smu7_smumgr *smu_data = (struct smu7_smumgr *)(hwmgr->smu_backend);
 
-	if (AVFS_BTC_COMPLETED_SAVED == priv->avfs.AvfsBtcStatus) {
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_COMPLETED_RESTORED;
-		return 0;
-	} else
-		return -EINVAL;
-}
-
-/* Work in Progress */
-static int fiji_save_vft_table(struct pp_smumgr *smumgr)
-{
-	struct fiji_smumgr *priv = (struct fiji_smumgr *)(smumgr->backend);
-
-	if (AVFS_BTC_COMPLETED_SAVED == priv->avfs.AvfsBtcStatus) {
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_COMPLETED_RESTORED;
-		return 0;
-	} else
-		return -EINVAL;
-}
-
-static int fiji_avfs_event_mgr(struct pp_smumgr *smumgr, bool smu_started)
-{
-	struct fiji_smumgr *priv = (struct fiji_smumgr *)(smumgr->backend);
-
-	switch (priv->avfs.AvfsBtcStatus) {
-	case AVFS_BTC_COMPLETED_SAVED: /*S3 State - Pre SMU Start */
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_RESTOREVFT_FAILED;
-		PP_ASSERT_WITH_CODE(0 == fiji_restore_vft_table(smumgr),
-				"[AVFS][fiji_avfs_event_mgr] Could not Copy Graphics "
-				"Level table over to SMU",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_COMPLETED_RESTORED;
+	switch (smu_data->avfs.avfs_btc_status) {
+	case AVFS_BTC_COMPLETED_PREVIOUSLY:
 		break;
-	case AVFS_BTC_COMPLETED_RESTORED: /*S3 State - Post SMU Start*/
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_SMUMSG_ERROR;
-		PP_ASSERT_WITH_CODE(0 == smum_send_msg_to_smc(smumgr,
-				0x666),
-				"[AVFS][fiji_avfs_event_mgr] SMU did not respond "
-				"correctly to VftTableIsValid Msg",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_SMUMSG_ERROR;
-		PP_ASSERT_WITH_CODE(0 == smum_send_msg_to_smc(smumgr,
-				PPSMC_MSG_EnableAvfs),
-				"[AVFS][fiji_avfs_event_mgr] SMU did not respond "
-				"correctly to EnableAvfs Message Msg",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_COMPLETED_SAVED;
-		break;
+
 	case AVFS_BTC_BOOT: /*Cold Boot State - Post SMU Start*/
 		if (!smu_started)
 			break;
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_FAILED;
-		PP_ASSERT_WITH_CODE(0 == fiji_setup_pm_fuse_for_avfs(smumgr),
-				"[AVFS][fiji_avfs_event_mgr] Failure at "
-				"fiji_setup_pm_fuse_for_avfs",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_DPMTABLESETUP_FAILED;
-		PP_ASSERT_WITH_CODE(0 == fiji_setup_graphics_level_structure(smumgr),
+		smu_data->avfs.avfs_btc_status = AVFS_BTC_FAILED;
+		PP_ASSERT_WITH_CODE(0 == fiji_setup_graphics_level_structure(hwmgr),
 				"[AVFS][fiji_avfs_event_mgr] Could not Copy Graphics Level"
 				" table over to SMU",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_VIRUS_FAIL;
-		PP_ASSERT_WITH_CODE(0 == fiji_setup_pwr_virus(smumgr),
+				return -EINVAL;);
+		smu_data->avfs.avfs_btc_status = AVFS_BTC_VIRUS_FAIL;
+		PP_ASSERT_WITH_CODE(0 == fiji_setup_pwr_virus(hwmgr),
 				"[AVFS][fiji_avfs_event_mgr] Could not setup "
 				"Pwr Virus for AVFS ",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_FAILED;
-		PP_ASSERT_WITH_CODE(0 == fiji_start_avfs_btc(smumgr),
+				return -EINVAL;);
+		smu_data->avfs.avfs_btc_status = AVFS_BTC_FAILED;
+		PP_ASSERT_WITH_CODE(0 == fiji_start_avfs_btc(hwmgr),
 				"[AVFS][fiji_avfs_event_mgr] Failure at "
 				"fiji_start_avfs_btc. AVFS Disabled",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_SAVEVFT_FAILED;
-		PP_ASSERT_WITH_CODE(0 == fiji_save_vft_table(smumgr),
-				"[AVFS][fiji_avfs_event_mgr] Could not save VFT Table",
-				return -1;);
-		priv->avfs.AvfsBtcStatus = AVFS_BTC_COMPLETED_SAVED;
+				return -EINVAL;);
+
+		smu_data->avfs.avfs_btc_status = AVFS_BTC_ENABLEAVFS;
 		break;
 	case AVFS_BTC_DISABLED: /* Do nothing */
-		break;
 	case AVFS_BTC_NOTSUPPORTED: /* Do nothing */
+	case AVFS_BTC_ENABLEAVFS:
 		break;
 	default:
-		pr_err("[AVFS] Something is broken. See log!");
+		pr_err("AVFS failed status is %x !\n", smu_data->avfs.avfs_btc_status);
 		break;
 	}
 	return 0;
 }
 
-static int fiji_start_smu(struct pp_smumgr *smumgr)
+static int fiji_start_smu(struct pp_hwmgr *hwmgr)
 {
 	int result = 0;
-	struct fiji_smumgr *priv = (struct fiji_smumgr *)(smumgr->backend);
+	struct fiji_smumgr *priv = (struct fiji_smumgr *)(hwmgr->smu_backend);
 
 	/* Only start SMC if SMC RAM is not running */
-	if (!(smu7_is_smc_ram_running(smumgr)
-		|| cgs_is_virtualization_enabled(smumgr->device))) {
-		fiji_avfs_event_mgr(smumgr, false);
+	if (!(smu7_is_smc_ram_running(hwmgr)
+		|| cgs_is_virtualization_enabled(hwmgr->device))) {
+		fiji_avfs_event_mgr(hwmgr, false);
 
 		/* Check if SMU is running in protected mode */
-		if (0 == SMUM_READ_VFPF_INDIRECT_FIELD(smumgr->device,
+		if (0 == PHM_READ_VFPF_INDIRECT_FIELD(hwmgr->device,
 				CGS_IND_REG__SMC,
 				SMU_FIRMWARE, SMU_MODE)) {
-			result = fiji_start_smu_in_non_protection_mode(smumgr);
+			result = fiji_start_smu_in_non_protection_mode(hwmgr);
 			if (result)
 				return result;
 		} else {
-			result = fiji_start_smu_in_protection_mode(smumgr);
+			result = fiji_start_smu_in_protection_mode(hwmgr);
 			if (result)
 				return result;
 		}
-		fiji_avfs_event_mgr(smumgr, true);
+		fiji_avfs_event_mgr(hwmgr, true);
 	}
 
 	/* To initialize all clock gating before RLC loaded and running.*/
-	cgs_set_clockgating_state(smumgr->device,
+	cgs_set_clockgating_state(hwmgr->device,
 			AMD_IP_BLOCK_TYPE_GFX, AMD_CG_STATE_GATE);
-	cgs_set_clockgating_state(smumgr->device,
+	cgs_set_clockgating_state(hwmgr->device,
 			AMD_IP_BLOCK_TYPE_GMC, AMD_CG_STATE_GATE);
-	cgs_set_clockgating_state(smumgr->device,
+	cgs_set_clockgating_state(hwmgr->device,
 			AMD_IP_BLOCK_TYPE_SDMA, AMD_CG_STATE_GATE);
-	cgs_set_clockgating_state(smumgr->device,
+	cgs_set_clockgating_state(hwmgr->device,
 			AMD_IP_BLOCK_TYPE_COMMON, AMD_CG_STATE_GATE);
 
 	/* Setup SoftRegsStart here for register lookup in case
 	 * DummyBackEnd is used and ProcessFirmwareHeader is not executed
 	 */
-	smu7_read_smc_sram_dword(smumgr,
+	smu7_read_smc_sram_dword(hwmgr,
 			SMU7_FIRMWARE_HEADER_LOCATION +
 			offsetof(SMU73_Firmware_Header, SoftRegisters),
 			&(priv->smu7_data.soft_regs_start), 0x40000);
 
-	result = smu7_request_smu_load_fw(smumgr);
+	result = smu7_request_smu_load_fw(hwmgr);
 
 	return result;
 }
 
-static bool fiji_is_hw_avfs_present(struct pp_smumgr *smumgr)
+static bool fiji_is_hw_avfs_present(struct pp_hwmgr *hwmgr)
 {
 
 	uint32_t efuse = 0;
 	uint32_t mask = (1 << ((AVFS_EN_MSB - AVFS_EN_LSB) + 1)) - 1;
 
-	if (cgs_is_virtualization_enabled(smumgr->device))
+	if (cgs_is_virtualization_enabled(hwmgr->device))
 		return 0;
 
-	if (!atomctrl_read_efuse(smumgr->device, AVFS_EN_LSB, AVFS_EN_MSB,
+	if (!atomctrl_read_efuse(hwmgr->device, AVFS_EN_LSB, AVFS_EN_MSB,
 			mask, &efuse)) {
 		if (efuse)
 			return true;
@@ -462,7 +365,7 @@ static bool fiji_is_hw_avfs_present(struct pp_smumgr *smumgr)
 * @param    smc_addr the address in the SMC RAM to access.
 * @param    value to write to the SMC SRAM.
 */
-static int fiji_smu_init(struct pp_smumgr *smumgr)
+static int fiji_smu_init(struct pp_hwmgr *hwmgr)
 {
 	int i;
 	struct fiji_smumgr *fiji_priv = NULL;
@@ -472,23 +375,10 @@ static int fiji_smu_init(struct pp_smumgr *smumgr)
 	if (fiji_priv == NULL)
 		return -ENOMEM;
 
-	smumgr->backend = fiji_priv;
+	hwmgr->smu_backend = fiji_priv;
 
-	if (smu7_init(smumgr))
+	if (smu7_init(hwmgr))
 		return -EINVAL;
-
-	fiji_priv->avfs.AvfsBtcStatus = AVFS_BTC_BOOT;
-	if (fiji_is_hw_avfs_present(smumgr))
-		/* AVFS Parameter
-		 * 0 - BTC DC disabled, BTC AC disabled
-		 * 1 - BTC DC enabled,  BTC AC disabled
-		 * 2 - BTC DC disabled, BTC AC enabled
-		 * 3 - BTC DC enabled,  BTC AC enabled
-		 * Default is 0 - BTC DC disabled, BTC AC disabled
-		 */
-		fiji_priv->avfs.AvfsBtcParam = 0;
-	else
-		fiji_priv->avfs.AvfsBtcStatus = AVFS_BTC_NOTSUPPORTED;
 
 	for (i = 0; i < SMU73_MAX_LEVELS_GRAPHICS; i++)
 		fiji_priv->activity_target[i] = 30;
@@ -514,10 +404,12 @@ const struct pp_smumgr_func fiji_smu_funcs = {
 	.init_smc_table = fiji_init_smc_table,
 	.update_sclk_threshold = fiji_update_sclk_threshold,
 	.thermal_setup_fan_table = fiji_thermal_setup_fan_table,
+	.thermal_avfs_enable = fiji_thermal_avfs_enable,
 	.populate_all_graphic_levels = fiji_populate_all_graphic_levels,
 	.populate_all_memory_levels = fiji_populate_all_memory_levels,
 	.get_mac_definition = fiji_get_mac_definition,
 	.initialize_mc_reg_table = fiji_initialize_mc_reg_table,
 	.is_dpm_running = fiji_is_dpm_running,
 	.populate_requested_graphic_levels = fiji_populate_requested_graphic_levels,
+	.is_hw_avfs_present = fiji_is_hw_avfs_present,
 };

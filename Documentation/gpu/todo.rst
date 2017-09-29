@@ -108,8 +108,8 @@ This would be especially useful for tinydrm:
   crtc state, clear that to the max values, x/y = 0 and w/h = MAX_INT, in
   __drm_atomic_helper_crtc_duplicate_state().
 
-- Move tinydrm_merge_clips into drm_framebuffer.c, dropping the tinydrm_
-  prefix ofc and using drm_fb_. drm_framebuffer.c makes sense since this
+- Move tinydrm_merge_clips into drm_framebuffer.c, dropping the tinydrm\_
+  prefix ofc and using drm_fb\_. drm_framebuffer.c makes sense since this
   is a function useful to implement the fb->dirty function.
 
 - Create a new drm_fb_dirty function which does essentially what e.g.
@@ -389,6 +389,16 @@ those drivers as simple as possible, so lots of room for refactoring:
 - also rework the drm_framebuffer_funcs->dirty hook wire-up, see above.
 
 Contact: Noralf Trønnes, Daniel Vetter
+
+AMD DC Display Driver
+---------------------
+
+AMD DC is the display driver for AMD devices starting with Vega. There has been
+a bunch of progress cleaning it up but there's still plenty of work to be done.
+
+See drivers/gpu/drm/amd/display/TODO for tasks.
+
+Contact: Harry Wentland, Alex Deucher
 
 Outside DRM
 ===========
